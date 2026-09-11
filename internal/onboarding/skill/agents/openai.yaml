@@ -1,0 +1,4 @@
+interface:
+  display_name: "Set up Skillverk"
+  short_description: "Review and consolidate existing agent skills"
+  default_prompt: "Use $skillverk-setup to review my installed skills and prepare a cleanup plan."
