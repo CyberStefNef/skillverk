@@ -1,0 +1,5 @@
+/bin/
+/docs/preview.ansi
+.DS_Store
+/dist/
+/build/
