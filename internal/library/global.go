@@ -134,10 +134,21 @@ func (s *Store) ShareGlobal(path string, replace bool) ([]Result, error) {
 
 func removeGlobalLink(a Activation) Result {
 	r := Result{Name: a.Name, Agent: "global", Path: a.Path, Action: "global link removed"}
+	if a.Harness != "" {
+		r.Agent = a.Harness
+	}
+	if !a.Created {
+		r.Action = "unmanaged global path preserved"
+		return r
+	}
+	if err := checkGlobalParents(a.Path); err != nil {
+		r.Error = err.Error()
+		return r
+	}
 	if !Exists(a.Path) {
 		return r
 	}
-	if !a.Created || !samePath(linkTarget(a.Path), a.Target) {
+	if !samePath(linkTarget(a.Path), a.Target) {
 		r.Error = "global path changed; preserved"
 		return r
 	}

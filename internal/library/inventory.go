@@ -13,6 +13,7 @@ import (
 
 type ScanRoot struct{ Path, Scope, Owner string }
 type Installation struct {
+	Managed bool   `json:"managed,omitempty"`
 	Tracked bool   `json:"tracked,omitempty"`
 	Path    string `json:"path"`
 	Scope   string `json:"scope"`
@@ -199,6 +200,35 @@ func (s *Store) catalogContext(ctx context.Context, repo string) ([]Skill, error
 	for n, sk := range by {
 		sk.Selected = st.Selected[n] != ""
 		sk.States = map[string]string{}
+		for _, link := range d.Links {
+			agent, global := s.globalHarness(link)
+			if !global || link.Name != n {
+				continue
+			}
+			if sk.GlobalStates == nil {
+				sk.GlobalStates = map[string]string{}
+			}
+			state := "active"
+			switch {
+			case link.Pending:
+				state = "pending removal"
+			case link.Error != "":
+				state = "failed: " + link.Error
+			case !link.Created || !samePath(linkTarget(link.Path), link.Target):
+				state = "missing"
+				if Exists(link.Path) {
+					state = "conflict (external path preserved)"
+				}
+			case !Exists(filepath.Join(link.Path, "SKILL.md")):
+				state = "missing central content"
+			}
+			if previous, exists := sk.GlobalStates[agent]; !exists || previous == "active" {
+				sk.GlobalStates[agent] = state
+			}
+			if !slices.ContainsFunc(sk.Installations, func(i Installation) bool { return samePath(i.Path, link.Path) }) {
+				sk.Installations = append(sk.Installations, Installation{Path: link.Path, Scope: "global", Owner: agent, Managed: link.Created && samePath(linkTarget(link.Path), link.Target)})
+			}
+		}
 		sk.CompatibilityPaths = compatibilityPaths(repo, n)
 		if repo != "" {
 			for _, a := range Agents {
@@ -260,6 +290,11 @@ func (s Skill) HasScope(scope string) bool {
 	return false
 }
 func (s Skill) Status() string {
+	for _, state := range s.GlobalStates {
+		if state != "active" {
+			return "partial"
+		}
+	}
 	if s.Selected {
 		for _, v := range s.States {
 			if v != "active" && v != "off" && v != "external" {
@@ -272,6 +307,9 @@ func (s Skill) Status() string {
 		if strings.HasPrefix(v, "failed") || v == "unexpected managed link" {
 			return "partial"
 		}
+	}
+	if len(s.GlobalStates) > 0 {
+		return "global"
 	}
 	if len(s.Installations) > 0 {
 		return "external"
@@ -295,6 +333,9 @@ func (s Skill) Details() string {
 		if v := s.States[a]; v != "" {
 			lines = append(lines, AgentLabel(a)+" managed link: "+v)
 		}
+		if v := s.GlobalStates[a]; v != "" {
+			lines = append(lines, AgentLabel(a)+" global managed link: "+v)
+		}
 	}
 	for _, agent := range Agents {
 		for _, path := range s.CompatibilityPaths[agent] {
@@ -314,7 +355,7 @@ func (s Skill) Details() string {
 		lines = append(lines, "Plugin cache is inventory only; its manager controls enablement.")
 	}
 	if s.HasScope("global") || s.HasScope("inherited") {
-		lines = append(lines, "External availability is independent of this repository's selection.")
+		lines = append(lines, "Global and inherited availability is independent of this repository's selection.")
 	}
 	if s.Problem != "" {
 		lines = append(lines, s.Problem)
@@ -367,6 +408,8 @@ func (s *Store) Doctor(repo string) ([]Result, error) {
 	for _, a := range d.Links {
 		if a.Pending {
 			rs = append(rs, Result{Name: a.Name, Agent: a.Agent, Path: a.Path, Action: "pending cleanup", Error: "visit this working tree to reconcile; original path may be unreachable or replaced"})
+		} else if a.Repo == "" && a.Harness != "" && a.Error != "" {
+			rs = append(rs, Result{Name: a.Name, Agent: a.Harness, Path: a.Path, Action: "retry --global", Error: a.Error})
 		} else if a.Repo == "" && a.Created && !samePath(linkTarget(a.Path), a.Target) {
 			rs = append(rs, Result{Name: a.Name, Agent: a.Agent, Path: a.Path, Action: "inspect", Error: "managed global link is missing or replaced; review the installation before sharing it again"})
 		}

@@ -43,6 +43,25 @@ search, `m` for the menu, and `?` for help.
 Import from Git repositories, local folders, or archives. Update a shared skill
 once and every repository using it gets the change.
 
+To enable a skill across all your repositories:
+
+```sh
+skillverk on review --global
+```
+
+This creates user-account links for Codex and Claude Code. Use `--harness codex`
+to enable it for one client, or choose other supported harnesses. Global links
+are independent of repository selections and follow the same shared updates.
+
+```sh
+skillverk list --global
+skillverk off review --global
+skillverk retry --global
+```
+
+Global commands also work outside Git repositories. Existing installations stay
+in place when they conflict; inspect or migrate them before retrying.
+
 ## Setup and migration
 
 Already have skills installed? The setup skill helps you review them and move

@@ -396,7 +396,7 @@ func (s *Store) unlink(d *database, repo string, t intent) (string, bool) {
 // whether the index was rewritten and therefore needs persisting.
 func adoptGlobalAlias(d *database, repo, meta string, st *State, t intent) (int, bool) {
 	for i, a := range d.Links {
-		if a.Repo != "" || a.Agent != "global" || !a.Created || a.Pending {
+		if a.Repo != "" || a.Agent != "global" || a.Harness != "" || !a.Created || a.Pending {
 			continue
 		}
 		if a.ID != t.id || a.Path != t.path || !samePath(linkTarget(t.path), a.Target) {
