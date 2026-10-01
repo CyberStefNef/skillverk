@@ -2,6 +2,7 @@ package library
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 )
 
@@ -14,8 +15,8 @@ type harness struct {
 }
 
 var harnessRegistry = []harness{
-	{"codex", "Codex", ".agents/skills", "", nil, true},
-	{"claude", "Claude Code", ".claude/skills", "", nil, true},
+	{"codex", "Codex", ".agents/skills", ".agents/skills", nil, true},
+	{"claude", "Claude Code", ".claude/skills", ".claude/skills", nil, true},
 	{"opencode", "OpenCode", ".opencode/skills", ".config/opencode/skills", []string{".agents/skills", ".claude/skills"}, false},
 	{"cursor", "Cursor", ".cursor/skills", ".cursor/skills", []string{".agents/skills", ".claude/skills", ".codex/skills"}, false},
 	{"gemini", "Gemini CLI", ".gemini/skills", ".gemini/skills", []string{".agents/skills"}, false},
@@ -24,7 +25,7 @@ var harnessRegistry = []harness{
 	{"factory", "Factory", ".factory/skills", ".factory/skills", []string{".agents/skills", ".agent/skills"}, false},
 	{"pi", "Pi", ".pi/skills", ".pi/agent/skills", nil, false},
 	{"vibe", "Vibe", ".vibe/skills", ".vibe/skills", nil, false},
-	{"antigravity", "Antigravity", ".agent/skills", "", nil, false},
+	{"antigravity", "Antigravity", ".agent/skills", ".gemini/config/skills", nil, false},
 }
 var Agents, DefaultAgents, agentPaths = func() ([]string, []string, map[string]string) {
 	var all, defaults []string
@@ -41,6 +42,27 @@ var Agents, DefaultAgents, agentPaths = func() ([]string, []string, map[string]s
 
 // AgentPath is the repository-relative directory a harness reads skills from.
 func AgentPath(agent string) string { return agentPaths[agent] }
+
+// GlobalRoot returns the user-account discovery directory for one harness.
+func GlobalRoot(agent string) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	for _, h := range harnessRegistry {
+		if h.id != agent {
+			continue
+		}
+		if agent == "claude" && os.Getenv("CLAUDE_CONFIG_DIR") != "" {
+			return filepath.Abs(filepath.Join(Expand(os.Getenv("CLAUDE_CONFIG_DIR")), "skills"))
+		}
+		if agent == "opencode" && os.Getenv("XDG_CONFIG_HOME") != "" {
+			return filepath.Abs(filepath.Join(Expand(os.Getenv("XDG_CONFIG_HOME")), "opencode", "skills"))
+		}
+		return filepath.Abs(filepath.Join(home, filepath.FromSlash(h.global)))
+	}
+	return "", fmt.Errorf("unknown harness %s", agent)
+}
 
 func AgentLabel(agent string) string {
 	for _, h := range harnessRegistry {

@@ -30,6 +30,7 @@ type Skill struct {
 	Entry                 *Entry              `json:"entry,omitempty" yaml:"-"`
 	Selected              bool                `json:"selected" yaml:"-"`
 	States                map[string]string   `json:"agents,omitempty" yaml:"-"`
+	GlobalStates          map[string]string   `json:"global_agents,omitempty" yaml:"-"`
 	Harnesses             []string            `json:"harnesses,omitempty" yaml:"-"` // the harnesses a selected skill reaches
 	Problem               string              `json:"problem,omitempty" yaml:"-"`
 	Installations         []Installation      `json:"installations,omitempty" yaml:"-"`
@@ -84,6 +85,8 @@ func (st State) SkillAgents(name string) []string {
 }
 
 type Activation struct {
+	Harness  string `json:"harness,omitempty"`
+	Error    string `json:"error,omitempty"`
 	Name     string `json:"name"`
 	ID       string `json:"id"`
 	Repo     string `json:"repo"`
@@ -371,6 +374,9 @@ func (s *Store) load() (database, error) {
 		}
 	}
 	for _, a := range d.Links {
+		if a.Harness != "" && (a.Agent != "global" || !slices.Contains(Agents, a.Harness)) {
+			return d, errors.New("invalid global harness")
+		}
 		if a.Agent == "global" && a.Repo == "" && a.Metadata == "" && filepath.IsAbs(a.Path) && filepath.Dir(a.Path) != a.Path && ValidateName(a.Name) == nil && validID(a.ID) && (a.Target == s.entryPath(Entry{ID: a.ID}) || a.Target == filepath.Join(s.entryPath(Entry{ID: a.ID}), "SKILL.md")) {
 			continue
 		}

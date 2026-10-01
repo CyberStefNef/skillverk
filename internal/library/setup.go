@@ -161,7 +161,7 @@ func (s *Store) scanSetup(ctx context.Context, roots []string) (SetupPlan, error
 				plan.Warnings = append(plan.Warnings, sk.Path+": "+sk.Problem)
 			}
 			for _, in := range sk.Installations {
-				if (repo == "" && in.Scope != "global") || (repo != "" && in.Scope != "project") || in.Owner == "admin" || strings.Contains(filepath.ToSlash(in.Path), "/.system/") || seen[in.Path] {
+				if in.Managed || (repo == "" && in.Scope != "global") || (repo != "" && in.Scope != "project") || in.Owner == "admin" || strings.Contains(filepath.ToSlash(in.Path), "/.system/") || seen[in.Path] {
 					continue
 				}
 				if Exists(filepath.Join(in.Path, ".skillverk-owned")) {

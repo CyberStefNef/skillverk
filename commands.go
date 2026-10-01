@@ -137,18 +137,34 @@ func confirmReplacements(e *env, c *library.Collection, selected []library.Skill
 }
 
 func listCommand(e *env) *cobra.Command {
-	return &cobra.Command{
+	var global bool
+	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "Show library, repository, and external skills",
 		Args:  cobra.NoArgs,
 		RunE: func(*cobra.Command, []string) error {
-			rows, err := e.store.Catalog(e.repo)
+			repo := e.repo
+			if global {
+				repo = ""
+			}
+			rows, err := e.store.Catalog(repo)
 			if err != nil {
 				return err
 			}
-			state, err := library.ReadState(e.repo)
+			state, err := library.ReadState(repo)
 			if err != nil {
 				return err
+			}
+			if global {
+				rows = slices.DeleteFunc(rows, func(sk library.Skill) bool { return !sk.HasScope("global") && len(sk.GlobalStates) == 0 })
+				if e.json {
+					return e.emit(map[string]any{"scope": "global", "skills": rows, "cleanup": e.pending})
+				}
+				fmt.Println("Global skills")
+				for _, sk := range rows {
+					fmt.Printf("%-28s %-12s %-10s %s\n", sk.Name, sk.Ownership(), sk.Status(), library.Clean(sk.Description))
+				}
+				return nil
 			}
 			if e.json {
 				return e.emit(map[string]any{"repository": e.repo, "agents": state.Agents, "skills": rows, "cleanup": e.pending})
@@ -182,10 +198,12 @@ func listCommand(e *env) *cobra.Command {
 					}
 				}
 			}
-			fmt.Println("\nExternal, global, and plugin availability is controlled by whatever installed it.")
+			fmt.Println("\nUse on/off --global for managed user-account links. External and plugin availability stays with its owner.")
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&global, "global", false, "show user-account skill installations")
+	return cmd
 }
 
 func inspectCommand(e *env) *cobra.Command {
@@ -218,16 +236,20 @@ func selectCommand(e *env, on bool) *cobra.Command {
 		long = "Changes apply immediately to every harness this repository has enabled.\nA running agent may need to reload before it sees them.\n\n--harness turns the skill off for those harnesses only, leaving the rest linked.\nTurning off the last one turns the skill off entirely."
 	}
 	var harnesses []string
+	var global bool
 	cmd := &cobra.Command{
 		Use:     use,
 		Short:   short,
 		Long:    long,
-		Example: "  skillverk " + strings.Fields(use)[0] + " review\n  skillverk " + strings.Fields(use)[0] + " review --harness codex",
+		Example: "  skillverk " + strings.Fields(use)[0] + " review\n  skillverk " + strings.Fields(use)[0] + " review --harness codex\n  skillverk " + strings.Fields(use)[0] + " review --global",
 		Args:    cobra.MinimumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			chosen, err := splitAgents(harnesses)
 			if err != nil {
 				return err
+			}
+			if global {
+				return e.report(e.store.SelectGlobal(args, chosen, on))
 			}
 			if len(chosen) == 0 {
 				return e.report(e.store.Select(e.repo, args, on))
@@ -258,6 +280,8 @@ func selectCommand(e *env, on bool) *cobra.Command {
 			return e.report(results, nil)
 		},
 	}
+	cmd.Long += "\n\n--global changes user-account links independently of this repository.\nGlobal activation defaults to Codex and Claude Code; --harness selects clients.\nGlobal deactivation without --harness removes all recorded global links for the skill."
+	cmd.Flags().BoolVar(&global, "global", false, "change user-account links instead of repository links")
 	cmd.Flags().StringSliceVar(&harnesses, "harness", nil, "limit the change to these harnesses")
 	_ = cmd.RegisterFlagCompletionFunc("harness", func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 		return library.Agents, cobra.ShellCompDirectiveNoFileComp
@@ -327,12 +351,20 @@ for the defaults, and "all" for every supported harness.`,
 }
 
 func retryCommand(e *env) *cobra.Command {
-	return &cobra.Command{
+	var global bool
+	cmd := &cobra.Command{
 		Use:   "retry",
 		Short: "Reapply this repository's intended state after a failure",
 		Args:  cobra.NoArgs,
-		RunE:  func(*cobra.Command, []string) error { return e.report(e.store.Retry(e.repo)) },
+		RunE: func(*cobra.Command, []string) error {
+			if global {
+				return e.report(e.store.RetryGlobal())
+			}
+			return e.report(e.store.Retry(e.repo))
+		},
 	}
+	cmd.Flags().BoolVar(&global, "global", false, "reapply intended user-account links")
+	return cmd
 }
 
 func updateCommand(e *env) *cobra.Command {

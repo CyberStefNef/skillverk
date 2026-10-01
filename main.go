@@ -20,10 +20,11 @@ import (
 
 const overview = `Skillverk keeps one shared library of agent skills and one selection per Git
 working tree. Importing a skill copies it into the library; turning it on links
-it into the harnesses this repository has enabled. The two steps stay separate.
+it into the harnesses this repository has enabled. Use on --global to enable it
+across repositories. Importing and enabling stay separate.
 
 Run skillverk with no arguments to open the interactive picker. Outside a Git
-working tree the library commands still work; activation does not.`
+working tree, use on --global for user-account activation.`
 
 // env is the resolved context every command runs in. It is built once, in the
 // root command's PersistentPreRunE, so subcommands only describe themselves.

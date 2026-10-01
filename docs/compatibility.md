@@ -26,6 +26,37 @@ harness still applies its own discovery rules, and several read directories
 belonging to others. OpenCode, for example, reads `.agents/skills`, so it can
 find a skill you selected for Codex alone.
 
+## Global activation targets
+
+`skillverk on NAME --global` enables user-account links, with Codex and Claude Code
+as the defaults. `--harness` selects clients independently of the current
+repository. `off --global` removes all recorded global links for the named skill,
+or just the requested harnesses. `retry --global` repairs recorded global intents.
+
+| Harness | User-account discovery directory |
+| --- | --- |
+| Codex | `~/.agents/skills` |
+| Claude Code | `~/.claude/skills`, or `$CLAUDE_CONFIG_DIR/skills` |
+| OpenCode | `~/.config/opencode/skills`, or `$XDG_CONFIG_HOME/opencode/skills` |
+| Cursor | `~/.cursor/skills` |
+| Gemini CLI | `~/.gemini/skills` |
+| GitHub Copilot | `~/.copilot/skills` |
+| Windsurf | `~/.codeium/windsurf/skills` |
+| Factory | `~/.factory/skills` |
+| Pi | `~/.pi/agent/skills` |
+| Vibe | `~/.vibe/skills` |
+| Antigravity | `~/.gemini/config/skills` |
+
+The default Codex and Claude paths follow their
+[Codex skills documentation](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills)
+and [Claude Code skills documentation](https://code.claude.com/docs/en/skills#choose-where-skills-load).
+Other clients can discover shared directories too. Global activation creates only
+the chosen native links; each client still controls what it loads.
+
+Global changes preserve unmanaged paths and linked ancestors. They do not change
+repository selections. `list` and `inspect` report managed global state as
+`global_agents` in JSON, and `list --global` shows user-account installations.
+
 Skill details list readable entries in the repository directories that OpenCode,
 Cursor, Gemini, and Factory are known to share, and JSON output reports them as
 `compatibility_paths`. Skillverk reports these paths separately from the links
