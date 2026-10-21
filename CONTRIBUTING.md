@@ -71,6 +71,13 @@ Use `refactor`, `docs`, `build`, `ci`, `test`, `chore`, or `revert` for other wo
 conventional commits on `main` into a release PR with a proposed version and
 changelog. Review that PR and squash merge it when ready to release.
 
+Version bumps follow `release-please-config.json`. Before 1.0, ordinary `feat`
+and `fix` commits both bump the patch version, so additions and bug fixes stay
+on the current minor release line. Actual breaking changes bump the minor
+version. Keep commit types accurate: use `feat` for new behavior and `fix` for
+bugs. Use `Release-As` only when intentionally choosing a different release
+version.
+
 The release workflow builds the resulting tag for Linux, macOS, and Windows on
 amd64 and arm64, then uploads the archives and `checksums.txt`. It calls the
 build workflow directly because tags created with the built-in GitHub token
