@@ -50,9 +50,8 @@ func TestSpaceTurnsSkillOnAndOffImmediately(t *testing.T) {
 	}
 }
 
-// Outside a Git working tree the library stays browsable, but nothing can be
-// turned on, and the interface says so instead of failing quietly.
-func TestOutsideGitTheLibraryStaysBrowsable(t *testing.T) {
+// Outside Git, the picker opens in global scope and manages user-account links.
+func TestOutsideGitThePickerActivatesGlobalSkills(t *testing.T) {
 	a, _ := fixture(t)
 	outside, err := newApp(a.store, "")
 	if err != nil {
@@ -61,14 +60,27 @@ func TestOutsideGitTheLibraryStaysBrowsable(t *testing.T) {
 	size(outside, 100, 32)
 	focusOn(t, outside, "alpha")
 	press(t, outside, "space")
-	if outside.busy != "" {
-		t.Fatal("activation attempted outside Git")
+	if !outside.global || outside.top().(*skillsPage).state(outside) != "On globally" {
+		t.Fatal("outside Git did not use global activation:", screen(outside))
 	}
-	if !strings.Contains(outside.status.text, "Git working tree") {
-		t.Fatal("no explanation given:", outside.status.text)
+	for _, agent := range library.DefaultAgents {
+		root, err := library.GlobalRoot(agent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stat(filepath.Join(root, "alpha", "SKILL.md")); err != nil {
+			t.Fatal("global link missing:", err)
+		}
 	}
 	if listed := names(outside.top().(*skillsPage).listPage); len(listed) != 2 {
 		t.Fatal("library not browsable outside Git:", listed)
+	}
+	press(t, outside, "g")
+	if !outside.global {
+		t.Fatal("g left global mode without a repository")
+	}
+	if outside.top().(*skillsPage).state(outside) != "Off globally" {
+		t.Fatal("global skill did not turn off")
 	}
 }
 
@@ -618,14 +630,22 @@ func TestEveryScreenFitsTheTerminal(t *testing.T) {
 // `make preview` after any change to the interface.
 func TestRenderDocumentation(t *testing.T) {
 	a, _ := fixture(t)
+	if os.Getenv("SKILLVERK_RENDER_SCOPE") == "global" {
+		openGlobalPicker(t, a)
+	}
 	focusOn(t, a, "zebra")
-	press(t, a, "space")
+	if os.Getenv("SKILLVERK_RENDER_SCOPE") == "global-toggle" {
+		press(t, a, "g")
+	} else {
+		press(t, a, "space")
+	}
 	size(a, 112, 32)
 
 	a.repo = "/work/my-repository"
 	a.status = noteMsg{}
 	for i := range a.data.skills {
 		sk := &a.data.skills[i]
+		previousName := sk.Name
 		switch sk.Name {
 		case "zebra":
 			sk.Name = "grill-with-docs"
@@ -639,6 +659,12 @@ func TestRenderDocumentation(t *testing.T) {
 			sk.Entry.Source = "https://github.com/mattpocock/skills.git"
 			sk.Entry.Subpath = "skills/engineering/" + sk.Name
 		}
+		for j := range sk.Installations {
+			install := &sk.Installations[j]
+			if filepath.Base(install.Path) == previousName {
+				install.Path = filepath.Join(filepath.Dir(install.Path), sk.Name)
+			}
+		}
 	}
 	a.data.skills = append(a.data.skills, library.Skill{
 		Name:          "global-writing",
@@ -647,7 +673,7 @@ func TestRenderDocumentation(t *testing.T) {
 	})
 	page := a.top().(*skillsPage)
 	page.fill(a)
-	page.list.Select(0)
+	focusOn(t, a, "grill-with-docs")
 
 	view := a.View().Content
 	for _, want := range []string{"grill-with-docs", "tdd", "mattpocock/skills", "quit"} {

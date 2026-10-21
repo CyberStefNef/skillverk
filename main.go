@@ -23,8 +23,9 @@ working tree. Importing a skill copies it into the library; turning it on links
 it into the harnesses this repository has enabled. Use on --global to enable it
 across repositories. Importing and enabling stay separate.
 
-Run skillverk with no arguments to open the interactive picker. Outside a Git
-working tree, use on --global for user-account activation.`
+Run skillverk with no arguments to open the interactive picker. Press g to
+toggle the highlighted skill globally. The menu switches between repository
+and global views. Outside a Git working tree, the picker opens in global mode.`
 
 // env is the resolved context every command runs in. It is built once, in the
 // root command's PersistentPreRunE, so subcommands only describe themselves.

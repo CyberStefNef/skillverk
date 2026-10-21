@@ -104,9 +104,10 @@ type snapshot struct {
 }
 
 type app struct {
-	store *library.Store
-	repo  string
-	data  snapshot
+	store  *library.Store
+	repo   string
+	global bool
+	data   snapshot
 
 	width, height int
 	theme         theme
@@ -130,7 +131,7 @@ type app struct {
 }
 
 func newApp(s *library.Store, repo string) (*app, error) {
-	a := &app{store: s, repo: repo, width: 96, height: 30, theme: newTheme(darkBackground())}
+	a := &app{store: s, repo: repo, global: repo == "", width: 96, height: 30, theme: newTheme(darkBackground())}
 	a.help = help.New()
 	a.help.Styles = a.theme.Help
 	a.spinner = spinner.New(spinner.WithSpinner(spinner.Dot))
@@ -146,11 +147,12 @@ func newApp(s *library.Store, repo string) (*app, error) {
 
 // refresh reloads every store-backed value the pages render.
 func (a *app) refresh() error {
-	skills, err := a.store.Catalog(a.repo)
+	repo := a.scopeRepo()
+	skills, err := a.store.Catalog(repo)
 	if err != nil {
 		return err
 	}
-	state, err := library.ReadState(a.repo)
+	state, err := library.ReadState(repo)
 	if err != nil {
 		return err
 	}
@@ -164,6 +166,74 @@ func (a *app) refresh() error {
 	}
 	a.data = snapshot{skills: skills, state: state, originals: originals, review: review}
 	return nil
+}
+
+func (a *app) scopeRepo() string {
+	if a.global {
+		return ""
+	}
+	return a.repo
+}
+
+func (a *app) switchScope() tea.Cmd {
+	if a.repo == "" {
+		return note("Global skills apply to all chats and repositories on this machine.")
+	}
+	held := ""
+	if p, ok := a.top().(*skillsPage); ok && p.skill() != nil {
+		held = p.skill().Name
+	}
+	a.global = !a.global
+	if err := a.refresh(); err != nil {
+		a.global = !a.global
+		return failure(err)
+	}
+	a.unwind(1)
+	p := newSkillsPage(a)
+	for i, r := range p.rows() {
+		if r.id == held {
+			p.list.Select(i)
+			break
+		}
+	}
+	a.stack[0] = p
+	a.status = noteMsg{}
+	return a.resize()
+}
+
+func (a *app) selected(sk library.Skill) bool {
+	if a.global {
+		return len(sk.GlobalStates) > 0
+	}
+	return sk.Selected
+}
+
+func (a *app) states(sk library.Skill) map[string]string {
+	if a.global {
+		return sk.GlobalStates
+	}
+	return sk.States
+}
+
+func (a *app) selectSkill(name string, on bool) ([]library.Result, error) {
+	if a.global {
+		return a.store.SelectGlobal([]string{name}, nil, on)
+	}
+	return a.store.Select(a.repo, []string{name}, on)
+}
+
+func (a *app) toggleGlobal(sk library.Skill) tea.Cmd {
+	if sk.Entry == nil && len(sk.GlobalStates) == 0 {
+		return warn("%s must be in your library to enable it globally.", sk.Name)
+	}
+	on := len(sk.GlobalStates) == 0
+	label := "Turning on " + sk.Name + " globally"
+	if !on {
+		label = "Turning off " + sk.Name + " globally"
+	}
+	return a.perform(label, func() ([]library.Result, error) {
+		return a.store.SelectGlobal([]string{sk.Name}, nil, on)
+	})
 }
 
 func (a *app) top() page { return a.stack[len(a.stack)-1] }
@@ -438,9 +508,9 @@ func (a *app) headerLines(width int) string {
 	t := a.theme
 	// The right of the bar is for what is wrong, not for what is normal: the
 	// harnesses a repository uses are named per skill in the detail pane.
-	context, right := "Library only", "Open a Git repository to activate skills"
-	if a.repo != "" {
-		context, right = filepath.Base(a.repo), ""
+	context, right := "Global", "All chats and repositories on this machine"
+	if !a.global && a.repo != "" {
+		context, right = "Repository · "+filepath.Base(a.repo), ""
 		if len(a.data.state.Agents) == 0 {
 			right = "No harnesses enabled; press m to choose"
 		}
@@ -482,8 +552,7 @@ func (a *app) footerLines(width int) string {
 		view := a.help.FullHelpView(columns(append(bindings, escapes...), 3))
 		return strings.Join([]string{"", t.Rule.Render(strings.Repeat("─", width)), a.statusLine(width), view}, "\n")
 	}
-	// Help and quit are the way out of anything, so they keep their place on
-	// the right while the screen's own controls absorb the truncation.
+	// Keep help and quit visible on the right.
 	a.help.SetWidth(0)
 	right := a.help.ShortHelpView(escapes)
 	budget := max(1, width-ansi.StringWidth(right)-3)
@@ -638,8 +707,7 @@ func summarize(results []library.Result) string {
 	if len(parts) == 0 {
 		return "Done."
 	}
-	// No nudge after an import: inside a repository the import asks whether to
-	// turn the skills on, and outside one there is nothing to turn them on for.
+	// Imports ask whether to turn the skills on in the displayed scope.
 	text := strings.Join(parts, "; ")
 	return strings.ToUpper(text[:1]) + text[1:] + "."
 }

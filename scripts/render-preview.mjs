@@ -1,9 +1,12 @@
 // Render the actual ANSI TUI snapshot into a portable README image.
-// Run via `make preview`. This script is a docs utility, not part of Skillverk.
+// Run via `make preview`, or pass an ANSI input, SVG output, and image title.
+// With explicit paths, the README screenshot is left unchanged.
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 
-const source = fs.readFileSync(new URL('../docs/preview.ansi', import.meta.url), 'utf8');
+const [input, destination, title = 'Skillverk showing grill-with-docs from mattpocock/skills'] = process.argv.slice(2);
+if (Boolean(input) !== Boolean(destination)) throw new Error('Pass both an ANSI input and SVG output');
+const source = fs.readFileSync(input ?? new URL('../docs/preview.ansi', import.meta.url), 'utf8');
 const columns = 112, cell = 9, rowHeight = 20, inset = 24, top = 54;
 const lines = source.split('\n');
 const width = columns * cell + inset * 2;
@@ -54,14 +57,19 @@ for (const [row, line] of lines.entries()) {
   }
 }
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-<title>Skillverk showing grill-with-docs from mattpocock/skills</title>
-<desc>Actual repository view with selected skills first, the remaining library underneath, and immediate keyboard controls. Both agents share one repository setting.</desc>
+<title>${escape(title)}</title>
+<desc>Actual picker view with selected skills first, the remaining library underneath, and immediate keyboard controls.</desc>
 <rect width="${width}" height="${height}" rx="16" fill="#10181e"/>
 <path d="M0 38H${width}" stroke="#30414b"/>
 <circle cx="23" cy="20" r="5" fill="#ef8b8b"/><circle cx="41" cy="20" r="5" fill="#f4c47c"/><circle cx="59" cy="20" r="5" fill="#8ce3c6"/>
 <text x="${width/2}" y="25" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#82929e">skillverk</text>
 <g font-family="DejaVu Sans Mono, monospace" font-size="15">${elements.join('\n')}</g>
 </svg>\n`;
+if (destination) {
+  fs.writeFileSync(destination, svg);
+  console.log(`Rendered ${destination}.`);
+  process.exit(0);
+}
 // A new filename prevents README viewers from reusing an older image.
 const readmePath = new URL('../README.md', import.meta.url);
 const readme = fs.readFileSync(readmePath, 'utf8');

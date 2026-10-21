@@ -101,7 +101,7 @@ func (p *setupOfferPage) begin(a *app) tea.Cmd {
 	if provider == "local" {
 		return p.scan(a)
 	}
-	cmd, err := onboarding.StartReview(provider, a.data.review.Models[provider], a.store, a.repo, p.roots)
+	cmd, err := onboarding.StartReview(provider, a.data.review.Models[provider], a.store, a.scopeRepo(), p.roots)
 	if err != nil {
 		return failure(err)
 	}

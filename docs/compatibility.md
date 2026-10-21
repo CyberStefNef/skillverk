@@ -57,6 +57,14 @@ Global changes preserve unmanaged paths and linked ancestors. They do not change
 repository selections. `list` and `inspect` report managed global state as
 `global_agents` in JSON, and `list --global` shows user-account installations.
 
+In the interactive picker, press `g` to toggle the highlighted skill globally
+from either view. The menu switches between repository and global skills.
+Outside Git, it opens in Global mode. Space changes the displayed scope.
+Enter opens a skill's pane, where each harness can be switched separately;
+choose **Show all harnesses** to include other supported clients. The menu offers
+**Retry global changes** to repair failed links. Global skills also apply to
+T3 Code's no-project chats when the provider uses the same account directories.
+
 Skill details list readable entries in the repository directories that OpenCode,
 Cursor, Gemini, and Factory are known to share, and JSON output reports them as
 `compatibility_paths`. Skillverk reports these paths separately from the links

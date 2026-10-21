@@ -12,6 +12,7 @@ type keySet struct {
 	All     key.Binding
 	Search  key.Binding
 	Actions key.Binding
+	Global  key.Binding
 	Back    key.Binding
 	Help    key.Binding
 	Quit    key.Binding
@@ -27,6 +28,7 @@ var keys = keySet{
 	All:     key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "all/none")),
 	Search:  key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search")),
 	Actions: key.NewBinding(key.WithKeys("m"), key.WithHelp("m", "menu")),
+	Global:  key.NewBinding(key.WithKeys("g"), key.WithHelp("g", "global on/off")),
 	Back:    key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back")),
 	Help:    key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 	Quit:    key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),

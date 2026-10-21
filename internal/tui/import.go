@@ -154,13 +154,10 @@ func importSkills(a *app, c *library.Collection, names []string, replace bool) t
 	})
 }
 
-// offerToTurnOn asks the question an import leaves hanging. A skill in the
-// library does nothing until a repository links it, and the moment someone has
-// just chosen it by name is the moment they know whether they want it here.
-// Answering no is free: the copy stays, and space on the list turns it on later.
+// offerToTurnOn offers activation in the scope where the import started.
 func offerToTurnOn(a *app, v jobMsg) tea.Cmd {
 	imported := importedNames(v.results)
-	if v.err != nil || a.repo == "" || len(imported) == 0 {
+	if v.err != nil || len(imported) == 0 {
 		return nil // the ordinary report says what happened
 	}
 	if err := a.refresh(); err != nil {
@@ -172,8 +169,16 @@ func offerToTurnOn(a *app, v jobMsg) tea.Cmd {
 		"Turning them on links them into " + filepath.Base(a.repo) + ". They stay in",
 		"your library either way.",
 	}, "\n")
-	question := newQuestionPage("Turn them on here?", "Turn on", "Not now", body, func(a *app) tea.Cmd {
+	title := "Turn them on here?"
+	if a.global {
+		title = "Turn them on globally?"
+		body = "Imported " + strings.Join(imported, ", ") + ".\n\nTurning them on makes them available to Codex and Claude Code in all chats\nand repositories on this machine. They stay in your library either way."
+	}
+	question := newQuestionPage(title, "Turn on", "Not now", body, func(a *app) tea.Cmd {
 		return tea.Sequence(toRoot, a.perform("Turning on", func() ([]library.Result, error) {
+			if a.global {
+				return a.store.SelectGlobal(imported, nil, true)
+			}
 			return a.store.Select(a.repo, imported, true)
 		}))
 	})
