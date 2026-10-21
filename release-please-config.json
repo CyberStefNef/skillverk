@@ -4,7 +4,6 @@
   "include-component-in-tag": false,
   "bump-minor-pre-major": true,
   "bump-patch-for-minor-pre-major": true,
-  "last-release-sha": "77ad3b4cec93a24cdd7140a66b87a1ed868c1931",
   "packages": {
     ".": {}
   }
