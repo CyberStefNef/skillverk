@@ -74,15 +74,21 @@ func skillActions(a *app, sk library.Skill) []action {
 	destroys := func(name, desc string, run func(*app) tea.Cmd) {
 		out = append(out, action{name: name, desc: desc, run: run, danger: true})
 	}
-	if a.repo != "" && (sk.Entry != nil || sk.Selected) && !sk.HasScope("project") {
+	if (a.global || a.repo != "") && (sk.Entry != nil || a.selected(sk)) && !sk.HasScope("project") {
 		name, on := "Turn on here", true
 		desc := "Link " + sk.Name + " into this repository for " + a.agentLabel()
-		if sk.Selected {
+		if a.selected(sk) {
 			name, on, desc = "Turn off here", false, "Unlink "+sk.Name+" from this repository. The library copy stays."
+		}
+		if a.global {
+			name, desc = "Turn on globally", "Link "+sk.Name+" for Codex and Claude Code in all chats and repositories on this machine."
+			if !on {
+				name, desc = "Turn off globally", "Remove this skill's managed global links. Repository selections and the library copy stay."
+			}
 		}
 		add(name, desc, func(a *app) tea.Cmd {
 			return tea.Sequence(toRoot, a.perform(name, func() ([]library.Result, error) {
-				return a.store.Select(a.repo, []string{sk.Name}, on)
+				return a.selectSkill(sk.Name, on)
 			}))
 		})
 	}
@@ -106,7 +112,7 @@ func skillActions(a *app, sk library.Skill) []action {
 				})
 		}
 	}
-	if a.repo != "" && sk.Entry != nil && !sk.HasScope("project") {
+	if !a.global && a.repo != "" && sk.Entry != nil && !sk.HasScope("project") {
 		add("Copy into this repository…", "Commit a copy to Git so the repository carries it. It stops following updates.",
 			func(a *app) tea.Cmd {
 				body := strings.Join([]string{

@@ -9,7 +9,7 @@ uses, across your coding agents.
 > like that, use something else.
 
 <p align="center">
-  <img src="docs/skill-picker-64bbf71c2c.svg" alt="Skillverk showing grill-with-docs from mattpocock/skills">
+  <img src="docs/skill-picker-4e47b0dd82.svg" alt="Skillverk showing grill-with-docs from mattpocock/skills">
 </p>
 
 ## Install
@@ -38,7 +38,10 @@ skillverk                      # choose skills for this repository
 ```
 
 Use the arrow keys to browse and Space to turn a skill on or off. Press `/` to
-search, `m` for the menu, and `?` for help.
+search, `g` to turn the highlighted skill on or off globally, `m` for the menu,
+and `?` for help. Space changes the displayed scope; `g` always changes global
+links. Use the menu to switch between repository and global views. Outside a
+Git repository, the picker opens in Global mode.
 
 Import from Git repositories, local folders, or archives. Update a shared skill
 once and every repository using it gets the change.
@@ -61,6 +64,10 @@ skillverk retry --global
 
 Global commands also work outside Git repositories. Existing installations stay
 in place when they conflict; inspect or migrate them before retrying.
+
+In the picker's Global mode, Space changes the skill's global links. Press Enter
+to switch individual harnesses, or choose **Show all harnesses** for other clients.
+These skills also work in T3 Code's no-project chats on the same machine.
 
 ## Setup and migration
 

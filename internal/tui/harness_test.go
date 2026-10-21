@@ -18,6 +18,14 @@ import (
 func fixture(t *testing.T) (*app, string) {
 	t.Helper()
 	root := tempDir(t)
+	account := filepath.Join(root, "account")
+	if err := os.MkdirAll(account, 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", account)
+	t.Setenv("USERPROFILE", account)
+	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(account, ".claude"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(account, ".config"))
 	repo := filepath.Join(root, "repository")
 	if err := os.Mkdir(repo, 0755); err != nil {
 		t.Fatal(err)

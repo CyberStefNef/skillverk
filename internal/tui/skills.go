@@ -18,7 +18,8 @@ import (
 // can be scanned. The detail pane answers the questions a name cannot: where
 // the skill applies and where it came from.
 type skillsPage struct {
-	external bool
+	external     bool
+	allHarnesses bool
 	*listPage
 	// focused moves the cursor from the list into the pane, where the skill's
 	// actions become a list of their own. Enter goes in, Esc comes back, and
@@ -41,6 +42,9 @@ type skillsPage struct {
 func newSkillsPage(a *app) *skillsPage {
 	// No lead line: the footer already names every key this screen uses.
 	p := &skillsPage{listPage: newList(a, "Skills", "", false, true), working: -1}
+	if a.global {
+		p.sub = "Global links apply to no-project chats and repository chats."
+	}
 	p.keys = []key.Binding{keys.Actions}
 	p.toggle = func(a *app, _ *listPage) tea.Cmd { return p.activate(a) }
 	p.enter = func(a *app, _ *listPage) tea.Cmd { return p.focus_(a) }
@@ -77,12 +81,18 @@ func (p *skillsPage) fill(a *app) {
 		}
 		r := row{id: sk.Name, name: sk.Name, desc: sk.Description, data: sk, check: checkOff}
 		r.badge, r.tone = badgeFor(sk)
+		if !a.global && !p.external && len(sk.GlobalStates) > 0 && r.badge == "" {
+			r.badge, r.tone = "global", levelDone
+		}
 		if p.external {
 			r.check = checkNone
-		} else if on(sk) {
+		} else if a.selected(sk) || (!a.global && sk.HasScope("project")) {
 			r.check = checkOn
 		}
 		rows = append(rows, r)
+	}
+	if a.global {
+		slices.SortStableFunc(rows, func(a, b row) int { return b.check - a.check })
 	}
 	p.setRows(rows)
 	for i, r := range rows {
@@ -93,12 +103,24 @@ func (p *skillsPage) fill(a *app) {
 	}
 }
 
-// agents are the harness columns of the matrix: the ones this repository has
-// enabled. Outside a repository there is nothing to link to, so there are none
-// and the list falls back to a single on/off glyph.
+// agents lists the current scope's harnesses. Global scope starts with the
+// defaults and any recorded links; the pane can expand to every supported agent.
 func (p *skillsPage) agents(a *app) []string {
-	if a.repo == "" || p.external {
+	if p.external {
 		return nil
+	}
+	if a.global {
+		if p.allHarnesses {
+			return library.Agents
+		}
+		var agents []string
+		sk := p.skill()
+		for _, agent := range library.Agents {
+			if slices.Contains(library.DefaultAgents, agent) || (sk != nil && sk.GlobalStates[agent] != "") {
+				agents = append(agents, agent)
+			}
+		}
+		return agents
 	}
 	return a.data.state.Agents
 }
@@ -106,12 +128,8 @@ func (p *skillsPage) agents(a *app) []string {
 // managed reports whether Skillverk decides where this skill applies: it is in
 // the library, on for this repository, or owned by the repository itself.
 func managed(sk library.Skill) bool {
-	return sk.Entry != nil || sk.Selected || sk.HasScope("project")
+	return sk.Entry != nil || sk.Selected || len(sk.GlobalStates) > 0 || sk.HasScope("project")
 }
-
-// on reports whether the skill applies to this repository right now.
-// Repository-owned skills always do; they ship with the code.
-func on(sk library.Skill) bool { return sk.Selected || sk.HasScope("project") }
 
 // badgeFor names only what the checkbox cannot say, so a badge in the list
 // always means "this row is not the ordinary case".
@@ -142,19 +160,19 @@ func (p *skillsPage) activate(a *app) tea.Cmd {
 	switch {
 	case sk == nil:
 		return nil
-	case a.repo == "":
+	case !a.global && a.repo == "":
 		return warn("Open a Git working tree to turn skills on.")
-	case sk.HasScope("project"):
+	case !a.global && sk.HasScope("project"):
 		return warn("%s is repository-owned; it is always available here.", sk.Name)
-	case sk.Entry == nil && !sk.Selected:
+	case sk.Entry == nil && !a.selected(*sk):
 		return warn("%s is installed elsewhere. Press Enter for ownership actions.", sk.Name)
 	}
-	name, turnOn := sk.Name, !sk.Selected
+	name, turnOn := sk.Name, !a.selected(*sk)
 	label := "Turning on " + name
 	if !turnOn {
 		label = "Turning off " + name
 	}
-	return a.perform(label, func() ([]library.Result, error) { return a.store.Select(a.repo, []string{name}, turnOn) })
+	return a.perform(label, func() ([]library.Result, error) { return a.selectSkill(name, turnOn) })
 }
 
 // ------------------------------------------------------------------ drawing
@@ -179,17 +197,17 @@ func (p *skillsPage) layout(a *app, width, height int) {
 func (p *skillsPage) view(a *app) string {
 	width := a.contentWidth()
 	if !split(width) {
-		if p.external && p.focused {
+		if p.focused {
 			return strings.Join(p.detail(a, width, p.list.Height()), "\n")
 		}
 		// Too narrow for a pane: keep the list, and say the one thing about
 		// the highlighted skill that the list cannot, harnesses included since
 		// there is nowhere else for them to go.
 		line := p.state(a)
-		if sk := p.skill(); sk != nil && a.repo != "" {
+		if sk := p.skill(); sk != nil {
 			var linked []string
 			for _, agent := range p.agents(a) {
-				if sk.States[agent] == "active" {
+				if a.states(*sk)[agent] == "active" {
 					linked = append(linked, library.AgentLabel(agent))
 				}
 			}
@@ -226,6 +244,10 @@ func (p *skillsPage) detail(a *app, width, height int) []string {
 		lines = append(lines, matrix...)
 		lines = append(lines, "")
 	}
+	if !a.global && !p.external {
+		lines = append(lines, field(t, "Global", globalSummary(*sk), width)...)
+		lines = append(lines, "")
+	}
 	if p.external {
 		message := "Enter to bring this installation into your library."
 		if len(adoptable(*sk)) == 0 {
@@ -254,7 +276,14 @@ func (p *skillsPage) detail(a *app, width, height int) []string {
 	// has the cursor, and the skill's actions once the pane takes it.
 	lines = append(lines, "")
 	if p.focused {
-		return append(lines, p.actionLines(a, width)...)
+		lines = append(lines, p.actionLines(a, width)...)
+		// Keep the selected harness or action visible on short terminals.
+		for i, line := range lines {
+			if strings.HasPrefix(strings.TrimSpace(ansi.Strip(line)), "› ") && height > 0 && i >= height {
+				return lines[i-height+1 : i+1]
+			}
+		}
+		return lines[:min(len(lines), max(0, height))]
 	}
 	const descriptionLines = 4
 	desc := wrap(t.Muted, library.Clean(sk.Description), width, descriptionLines)
@@ -275,7 +304,7 @@ func (p *skillsPage) detail(a *app, width, height int) []string {
 func (p *skillsPage) harnesses(a *app, sk library.Skill, width int) []string {
 	t := a.theme
 	enabled := p.agents(a)
-	if a.repo == "" || p.external {
+	if p.external {
 		return nil
 	}
 	var show []string
@@ -302,6 +331,9 @@ func (p *skillsPage) harnesses(a *app, sk library.Skill, width int) []string {
 			continue
 		}
 		glyph, tone, detail := harnessState(sk, agent)
+		if a.global {
+			glyph, tone, detail = globalHarnessState(sk, agent)
+		}
 		style, _ := t.status(tone)
 		mark := "  "
 		if p.focused && p.action == i {
@@ -320,6 +352,50 @@ func (p *skillsPage) harnesses(a *app, sk library.Skill, width int) []string {
 		lines = append(lines, line)
 	}
 	return lines
+}
+
+func globalHarnessState(sk library.Skill, agent string) (string, level, string) {
+	state := sk.GlobalStates[agent]
+	if state == "active" {
+		for _, install := range sk.Installations {
+			if install.Scope == "global" && install.Owner == agent && install.Managed {
+				return "●", levelDone, home(install.Path)
+			}
+		}
+		root, err := library.GlobalRoot(agent)
+		if err != nil {
+			return "!", levelWarn, err.Error()
+		}
+		return "●", levelDone, home(filepath.Join(root, sk.Name))
+	}
+	if state != "" {
+		return "!", levelWarn, state
+	}
+	for _, install := range sk.Installations {
+		if install.Scope == "global" && install.Owner == agent && !install.Managed {
+			return "○", levelInfo, "existing installation preserved"
+		}
+	}
+	return "·", levelInfo, "not linked"
+}
+
+func globalSummary(sk library.Skill) string {
+	var active []string
+	for _, agent := range library.Agents {
+		if state := sk.GlobalStates[agent]; state != "" {
+			if state != "active" {
+				return "Needs attention; open Global skills in the menu"
+			}
+			active = append(active, library.AgentLabel(agent))
+		}
+	}
+	if len(active) > 0 {
+		return strings.Join(active, " · ")
+	}
+	if sk.HasScope("global") {
+		return "Installed outside Skillverk"
+	}
+	return "Off"
 }
 
 // harnessState reads one square of the matrix: its glyph, how loudly to say it,
@@ -411,6 +487,10 @@ func (p *skillsPage) state(a *app) string {
 		return "Needs attention"
 	case p.external:
 		return "Installed in a " + externalScope(*sk) + " folder"
+	case a.global && a.selected(*sk):
+		return "On globally"
+	case a.global:
+		return "Off globally"
 	case sk.HasScope("project"):
 		return "Owned by this repository, always on here"
 	case sk.Selected:
@@ -677,7 +757,11 @@ func (p *skillsPage) empty(a *app) string {
 // does in the lists that stage a selection.
 func (p *skillsPage) bindings() []key.Binding {
 	if p.focused {
-		return []key.Binding{keys.Up, keys.Down, bind("enter", "run"), bind("esc", "back to list"), keys.Actions}
+		out := []key.Binding{keys.Up, keys.Down, bind("enter", "run"), bind("esc", "back to list"), keys.Actions}
+		if !p.external {
+			out = append(out, keys.Global)
+		}
+		return out
 	}
 	out := p.listPage.bindings()
 	for i, b := range out {
@@ -686,6 +770,12 @@ func (p *skillsPage) bindings() []key.Binding {
 		}
 	}
 	if !p.external {
+		for i, b := range out {
+			if b.Help().Key == keys.Actions.Help().Key {
+				out = slices.Insert(out, i+1, keys.Global)
+				break
+			}
+		}
 		out = append(out, bind("o", "on this machine"))
 	}
 	return out
@@ -707,6 +797,17 @@ func (p *skillsPage) actions(a *app) []action {
 		return nil
 	}
 	actions := skillActions(a, *sk)
+	if a.global && !p.external && sk.Entry != nil {
+		name := "Show all harnesses"
+		if p.allHarnesses {
+			name = "Show fewer harnesses"
+		}
+		actions = append([]action{{name: name, run: func(a *app) tea.Cmd {
+			p.allHarnesses = !p.allHarnesses
+			p.action = 0
+			return nil
+		}}}, actions...)
+	}
 	if p.external {
 		actions = append(actions, action{name: "Installation details…", desc: "Description and installed paths", run: func(a *app) tea.Cmd {
 			body := library.Clean(sk.Description)
@@ -751,14 +852,20 @@ func (p *skillsPage) switchHarness(a *app, agent string) tea.Cmd {
 	switch {
 	case sk == nil:
 		return nil
-	case a.repo == "":
+	case !a.global && a.repo == "":
 		return warn("Open a Git working tree to turn skills on.")
-	case sk.HasScope("project"):
+	case !a.global && sk.HasScope("project"):
 		return warn("%s is repository-owned; every harness here reads it from Git.", sk.Name)
 	case sk.Entry == nil:
 		return warn("%s is installed elsewhere. Skillverk does not link it.", sk.Name)
 	}
 	name := sk.Name
+	if a.global {
+		on := sk.GlobalStates[agent] == ""
+		return a.perform("Changing global links for "+name, func() ([]library.Result, error) {
+			return a.store.SelectGlobal([]string{name}, []string{agent}, on)
+		})
+	}
 	var wanted []string
 	for _, existing := range a.data.state.SkillAgents(name) {
 		if existing != agent {
@@ -800,6 +907,12 @@ func (p *skillsPage) update(a *app, msg tea.Msg) tea.Cmd {
 	k, ok := msg.(tea.KeyPressMsg)
 	if !ok || p.typing() {
 		return p.listPage.update(a, msg)
+	}
+	if k.String() == "g" && !p.external {
+		if sk := p.skill(); sk != nil {
+			return a.toggleGlobal(*sk)
+		}
+		return nil
 	}
 	if p.focused {
 		return p.act(a, k)

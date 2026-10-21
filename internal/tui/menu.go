@@ -138,7 +138,7 @@ func menuEntries(a *app) []menuEntry {
 		out = append(out, menuEntry{name: name, desc: desc, run: run})
 	}
 	acts("Import skills", "Add skills from a source, or from those already on this machine", importPanel)
-	if a.repo != "" {
+	if !a.global && a.repo != "" {
 		acts("Repository harnesses", "Choose which agents get links to the skills you turn on", harnessPanel)
 		if len(localAdoptions(a)) > 0 {
 			opens("Share repository skills…", "Move skills that live in this repository into the shared library",
@@ -149,7 +149,18 @@ func menuEntries(a *app) []menuEntry {
 				return a.perform("Retrying", func() ([]library.Result, error) { return a.store.Retry(a.repo) })
 			})
 	}
+	if a.global {
+		opens("Retry global changes", "Repair managed global links that previously failed",
+			func(a *app) tea.Cmd { return a.perform("Retrying global links", a.store.RetryGlobal) })
+	}
 	acts("Setup review", "Find the skill installations already on this machine and organise them", setupPanel)
+	if a.repo != "" {
+		name, desc := "Global skills", "Manage skills for all chats and repositories on this machine"
+		if a.global {
+			name, desc = "Repository skills", "Manage skills for this repository"
+		}
+		opens(name, desc, func(a *app) tea.Cmd { return a.switchScope() })
+	}
 	return out
 }
 
