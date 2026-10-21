@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/CyberStefNef/skillverk/compare/v0.1.1...v0.2.0) (2026-10-21)
+
+
+### Features
+
+* add global controls to the skill picker ([#9](https://github.com/CyberStefNef/skillverk/issues/9)) ([e5b1dc9](https://github.com/CyberStefNef/skillverk/commit/e5b1dc9f8817a68d996585369947090cd8724729))
+
 ## [0.1.1](https://github.com/CyberStefNef/skillverk/compare/v0.1.0...v0.1.1) (2026-10-01)
 
 
